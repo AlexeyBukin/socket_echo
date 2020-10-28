@@ -4,6 +4,8 @@ cmake-build-debug
 .my_socket
 server
 client
+!server/
+!client/
 
 # Prerequisites
 *.d
