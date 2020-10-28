@@ -1,3 +1,10 @@
+# Clion files
+cmake-build-debug
+.idea
+.my_socket
+server
+client
+
 # Prerequisites
 *.d
 
