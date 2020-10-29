@@ -6,7 +6,7 @@
 /*   By: kcharla <kcharla@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2020/10/28 22:49:53 by kcharla           #+#    #+#             */
-/*   Updated: 2020/10/30 01:36:15 by kcharla          ###   ########.fr       */
+/*   Updated: 2020/10/30 02:41:07 by kcharla          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 #include <stdlib.h>
@@ -25,10 +25,10 @@
 
 int guard(int n, char * err) { if (n == -1) { perror(err); exit(1); } return n; }
 
-int		client_disconnect()
-{
-
-}
+//int		client_disconnect()
+//{
+//
+//}
 
 char 		*server_process_client_line(char *cline);
 
@@ -52,8 +52,8 @@ int main() {
 	char *server_line = NULL;
 	char client_buff[256];
 	int client_recv = 0;
-	int client_str_size = 0;
-	int client_str_old_size = 0;
+	unsigned long client_str_size = 0;
+	unsigned long client_str_old_size = 0;
 
 	while (1)
 	{
@@ -86,6 +86,7 @@ int main() {
 		// non-blocking as well
 		if (has_client)
 		{
+			printf("Getting client info...\n");
 			struct pollfd pfd;
 			pfd.fd = client_socket_fd;
 			pfd.events = POLLIN | POLLHUP | POLLRDNORM;
@@ -113,15 +114,15 @@ int main() {
 					while ((client_recv = read(client_socket_fd, client_buff, sizeof(client_buff) - 1)) > 0)
 					{
 						client_buff[client_recv] = '\0';
-						unsigned long old_size = 0;
-						if (client_str != NULL)
-							old_size += strlen(client_str);
+						client_str_size += + client_recv;
+//						if (client_str != NULL)
+//							client_str_old_size += strlen(client_str);
 						char *new_str;
-						if ((new_str = (char *)malloc(old_size + client_recv + 1)) == NULL)
+						if ((new_str = (char *)malloc(client_str_size + 1)) == NULL)
 						{
 							send(client_socket_fd, error_msg, sizeof(error_msg), 0);
 							close(client_socket_fd);
-							printf("%s\n", "Server process line error. Connection is closed, shutting down...");
+							printf("%s\n", "Server malloc() error. Connection is closed, shutting down...");
 							exit(1);
 						}
 						*new_str = '\0';
@@ -131,12 +132,13 @@ int main() {
 						free(client_str);
 						client_str = new_str;
 					}
-					if (client_recv < 0)
+					if (client_recv < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
 					{
 						//error on read from fd
 						//try to send error_msg and close connection
 						send(client_socket_fd, error_msg, sizeof(error_msg), 0);
-						printf("%s\n", "Server process line error. Connection is closed, shutting down...");
+						printf("Errno is %d\n", errno);
+						printf("%s\n", "Server read() error. Connection is closed, server is running...");
 
 						has_client = 0;
 						close(client_socket_fd);
@@ -146,6 +148,7 @@ int main() {
 						client_str_size = 0;
 						client_str_old_size = 0;
 					}
+					printf("New str is '%s', size is %lu\n", client_str, client_str_size);
 				}
 				else
 				{
@@ -177,13 +180,20 @@ int main() {
 		// *** blocking part ***
 		if (has_client && client_str_size > client_str_old_size)
 		{
-			int i = client_str_old_size;
-			int line_begin = 0;
+			int count = 0;
+			unsigned long i = client_str_old_size;
+//			unsigned long i = 0;
+			unsigned long line_begin = 0;
 			while (i < client_str_size)
 			{
 				if (client_str[i] == '\n')
 				{
-					client_line = strndup(client_str + line_begin, i);
+					//TODO deleteme
+					count ++;
+					printf("Serving newline number %d\n", count);
+
+
+					client_line = strndup(client_str + line_begin, i - line_begin);
 					line_begin = i + 1;
 
 					server_line = server_process_client_line(client_line);
@@ -198,6 +208,7 @@ int main() {
 						printf("%s\n", "Server process line error. Connection is closed, shutting down...");
 						exit(1);
 					}
+					printf("This newline is '%s'\n\n", server_line);
 					send(client_socket_fd, server_line, strlen(server_line), 0);
 				}
 				i++;
@@ -206,7 +217,17 @@ int main() {
 			char *tmp = strdup(client_str + line_begin);
 			free(client_str);
 			client_str = tmp;
+			if (client_str == NULL){
+				send(client_socket_fd, error_msg, sizeof(error_msg), 0);
+				close(client_socket_fd);
+				printf("%s\n", "Server malloc() error. Connection is closed, shutting down...");
+				exit(1);
+			}
+			client_str_old_size = strlen(client_str);
+			client_str_size = client_str_old_size;
+			printf("Client str left is '%s'\n", client_str);
 		}
+		sleep(25);
 	}
 	return EXIT_SUCCESS;
 }
@@ -221,7 +242,8 @@ char 		*server_process_client_line(char *cline)
 	}
 	else
 	{
-		res = strdup("Unknown command. Try again.\n");
+		res = strdup(cline);
+//		res = strdup("Unknown command. Try again.\n");
 	}
 	return (res);
 }
