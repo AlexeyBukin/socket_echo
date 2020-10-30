@@ -6,7 +6,7 @@
 /*   By: kcharla <kcharla@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2020/10/28 22:49:53 by kcharla           #+#    #+#             */
-/*   Updated: 2020/10/30 07:57:13 by kcharla          ###   ########.fr       */
+/*   Updated: 2020/10/30 09:47:00 by kcharla          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 #include <stdlib.h>
@@ -226,6 +226,7 @@ int main() {
 
 					printf("This newline is '%s'\n\n", server_line);
 					send(client_socket_fd, server_line, strlen(server_line), 0);
+					free(server_line);
 
 					if (recode == RESPONSE_EXIT)
 					{
