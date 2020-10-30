@@ -6,7 +6,7 @@
 /*   By: kcharla <kcharla@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2020/10/28 22:49:53 by kcharla           #+#    #+#             */
-/*   Updated: 2020/10/30 02:41:07 by kcharla          ###   ########.fr       */
+/*   Updated: 2020/10/30 03:03:47 by kcharla          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 #include <stdlib.h>
@@ -19,6 +19,10 @@
 #include <memory.h>
 #include <poll.h>
 
+#define RESPONSE_OK     0
+#define RESPONSE_EXIT   1
+#define RESPONSE_ERROR -1
+
 // copy-paste from "https://jameshfisher.com/2017/04/05/set_socket_nonblocking/"
 // but this is the first right thing after hours of googling so ill leave it as is
 // sorry
@@ -30,7 +34,7 @@ int guard(int n, char * err) { if (n == -1) { perror(err); exit(1); } return n; 
 //
 //}
 
-char 		*server_process_client_line(char *cline);
+int			server_process_client_line(char *cline, char **response);
 
 int main() {
 	int listen_socket_fd = guard(socket(AF_INET, SOCK_STREAM, 0), "could not create TCP listening socket");
@@ -184,6 +188,7 @@ int main() {
 			unsigned long i = client_str_old_size;
 //			unsigned long i = 0;
 			unsigned long line_begin = 0;
+			int recode = RESPONSE_OK;
 			while (i < client_str_size)
 			{
 				if (client_str[i] == '\n')
@@ -196,11 +201,12 @@ int main() {
 					client_line = strndup(client_str + line_begin, i - line_begin);
 					line_begin = i + 1;
 
-					server_line = server_process_client_line(client_line);
+					recode = server_process_client_line(client_line, &server_line);
 
 					free(client_line);
 					client_line = NULL;
-					if (server_line == NULL)
+
+					if (recode == RESPONSE_ERROR || server_line == NULL)
 					{
 						// some serious error occured, must close
 						send(client_socket_fd, error_msg, sizeof(error_msg), 0);
@@ -208,42 +214,69 @@ int main() {
 						printf("%s\n", "Server process line error. Connection is closed, shutting down...");
 						exit(1);
 					}
+
 					printf("This newline is '%s'\n\n", server_line);
 					send(client_socket_fd, server_line, strlen(server_line), 0);
+
+					if (recode == RESPONSE_EXIT)
+					{
+						break ;
+					}
 				}
 				i++;
 			}
-			// update client_str so it has no '\n' anymore
-			char *tmp = strdup(client_str + line_begin);
-			free(client_str);
-			client_str = tmp;
-			if (client_str == NULL){
-				send(client_socket_fd, error_msg, sizeof(error_msg), 0);
+
+			if (recode == RESPONSE_EXIT)
+			{
+				has_client = 0;
 				close(client_socket_fd);
-				printf("%s\n", "Server malloc() error. Connection is closed, shutting down...");
-				exit(1);
+
+				free(client_str);
+				client_str = NULL;
+				client_str_size = 0;
+				client_str_old_size = 0;
 			}
-			client_str_old_size = strlen(client_str);
-			client_str_size = client_str_old_size;
-			printf("Client str left is '%s'\n", client_str);
+			else
+			{
+				// update client_str so it has no '\n' anymore
+				char *tmp = strdup(client_str + line_begin);
+				free(client_str);
+				client_str = tmp;
+				if (client_str == NULL){
+					send(client_socket_fd, error_msg, sizeof(error_msg), 0);
+					close(client_socket_fd);
+					printf("%s\n", "Server malloc() error. Connection is closed, shutting down...");
+					exit(1);
+				}
+				client_str_old_size = strlen(client_str);
+				client_str_size = client_str_old_size;
+				printf("Client str left is '%s'\n", client_str);
+			}
 		}
-		sleep(25);
+//		sleep(25);
 	}
 	return EXIT_SUCCESS;
 }
 
-char 		*server_process_client_line(char *cline)
+int			server_process_client_line(char *cline, char **response)
 {
+	int		recode;
 	char	*res;
 
-	if (strcmp(cline, "exit\n") == 0)
+	recode = RESPONSE_OK;
+	if (response == NULL)
+		return (RESPONSE_ERROR);
+	if (strcmp(cline, "exit") == 0)
 	{
 		res = strdup("Closing connection. Have a nice day :)\n");
+		recode = RESPONSE_EXIT;
 	}
 	else
 	{
+//		printf("str '%s' and '%s' are not the same\n", "exit", cline);
 		res = strdup(cline);
 //		res = strdup("Unknown command. Try again.\n");
 	}
-	return (res);
+	*response = res;
+	return (recode);
 }
