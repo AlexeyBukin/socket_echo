@@ -6,7 +6,7 @@
 /*   By: kcharla <kcharla@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2020/10/28 22:49:53 by kcharla           #+#    #+#             */
-/*   Updated: 2020/10/30 03:03:47 by kcharla          ###   ########.fr       */
+/*   Updated: 2020/10/30 07:57:13 by kcharla          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 #include <stdlib.h>
@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <memory.h>
 #include <poll.h>
+#include <time.h>
 
 #define RESPONSE_OK     0
 #define RESPONSE_EXIT   1
@@ -35,6 +36,7 @@ int guard(int n, char * err) { if (n == -1) { perror(err); exit(1); } return n; 
 //}
 
 int			server_process_client_line(char *cline, char **response);
+int			msleep(long msec);
 
 int main() {
 	int listen_socket_fd = guard(socket(AF_INET, SOCK_STREAM, 0), "could not create TCP listening socket");
@@ -51,6 +53,7 @@ int main() {
 	int has_client = 0;
 	char welcome_msg[] = "Server is ready. Type 'exit' to close connection.\n";
 	char error_msg[] = "Some error caused server to close connection. Press 'Enter' to continue.\n";
+	char busy_msg[] = "Server is currently used by another session/user. Try later.\n";
 	char *client_str = NULL;
 	char *client_line = NULL;
 	char *server_line = NULL;
@@ -84,6 +87,12 @@ int main() {
 				send(client_socket_fd, welcome_msg, sizeof(welcome_msg), 0);
 				printf("Got a connection; writing welcome message.\n");
 			}
+		}
+		else
+		{
+			int refuse_fd = accept(listen_socket_fd, NULL, NULL);
+			send(refuse_fd, busy_msg, sizeof(busy_msg), 0);
+			close (refuse_fd);
 		}
 
 		// check if client socket has data and get it
@@ -253,7 +262,7 @@ int main() {
 				printf("Client str left is '%s'\n", client_str);
 			}
 		}
-//		sleep(25);
+		msleep(100);
 	}
 	return EXIT_SUCCESS;
 }
@@ -279,4 +288,30 @@ int			server_process_client_line(char *cline, char **response)
 	}
 	*response = res;
 	return (recode);
+}
+
+/*
+** msleep(): Sleep for the requested number of milliseconds.
+** https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds
+*/
+
+int msleep(long msec)
+{
+	struct timespec ts;
+	int res;
+
+	if (msec < 0)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+
+	ts.tv_sec = msec / 1000;
+	ts.tv_nsec = (msec % 1000) * 1000000;
+
+	do {
+		res = nanosleep(&ts, &ts);
+	} while (res && errno == EINTR);
+
+	return res;
 }
